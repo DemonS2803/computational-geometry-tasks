@@ -24,6 +24,13 @@ JAVA_MAIN  := ru.yandex.practicum.Main
 TEST_ROOT  := tests
 OUT_DIR    := build/out
 
+# ---------- Генератор тестов ----------
+PYTHON     ?= python3
+GEN        := tools/gen_tests.py
+GEN_MODE   ?= mixed
+GEN_SIZES  ?= 10,100,1000,1000,1000,100000,1000000,10000000
+GEN_SEED   ?= 42
+
 TASKS ?= quick_hull
 # автовариант (если хочешь подхватывать каталоги автоматически):
 # TASKS ?= $(notdir $(patsubst %/,%,$(wildcard $(TEST_ROOT)/*/)))
@@ -31,7 +38,8 @@ TASKS ?= quick_hull
 task_tests = $(sort $(wildcard $(TEST_ROOT)/$(1)/input*.txt))
 
 .PHONY: all cpp java test clean help \
-        $(foreach t,$(TASKS),cpp-$(t) java-$(t) test-$(t))
+        $(foreach t,$(TASKS),cpp-$(t) java-$(t) test-$(t)) \
+        get-tests get-tests-clean
 
 all: cpp java
 
@@ -95,6 +103,31 @@ $(foreach t,$(TASKS),test-$(t)): test-%: cpp-% java-%
 	@:
 
 test: all $(foreach t,$(TASKS),test-$(t))
+
+# Сгенерировать тесты в каталог текущей задачи.
+# Использование:
+#   make gen-tests                         # defaults: mixed, 10/100/1000
+#   make gen-tests TASK=quick_hull GEN_MODE=circle GEN_SIZES=100:10000:1000
+#   make gen-tests TASK=quick_hull GEN_SIZES=10,100,1000 GEN_SEED=7
+gen-tests:
+	@task="$(if $(TASK),$(TASK),$(firstword $(TASKS)))"; \
+	if [ -z "$$task" ]; then echo "no TASK/TASKS set"; exit 1; fi; \
+	$(PYTHON) $(GEN) \
+	    --out $(TEST_ROOT)/$$task \
+	    --mode $(GEN_MODE) \
+	    --sizes $(GEN_SIZES) \
+	    --seed $(GEN_SEED); \
+	echo "task=$$task, tests in $(TEST_ROOT)/$$task"
+
+# Удалить сгенерированные пары в каталоге задачи (осторожно: удаляет ВСЕ input*/expected*).
+gen-tests-clean:
+	@task="$(if $(TASK),$(TASK),$(firstword $(TASKS)))"; \
+	if [ -z "$$task" ]; then echo "no TASK/TASKS set"; exit 1; fi; \
+	rm -f $(TEST_ROOT)/$$task/input*.txt $(TEST_ROOT)/$$task/expected*.txt; \
+	echo "cleaned $(TEST_ROOT)/$$task"
+
+# Перегенерировать (со страховкой от затирания)
+gen-tests-refresh: gen-tests-clean gen-tests
 
 # ============================ Прочее =================================
 help:

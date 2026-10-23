@@ -5,3 +5,7 @@
 ## Build results
 target
 build
+
+## Large files
+tests/quick_hull/expected8.txt
+tests/quick_hull/input8.txt
