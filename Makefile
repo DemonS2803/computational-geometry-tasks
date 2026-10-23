@@ -20,6 +20,12 @@ CXX_BIN    := build/runner_cpp
 JAVA_CP    := target/classes
 JAVA_MAIN  := ru.yandex.practicum.Main
 
+# ---------- Python ----------
+PYTHON     ?= python3
+PY_DIR     := src/main/python
+PY_MAIN    := $(PY_DIR)/main.py
+PY_SRCS    := $(wildcard $(PY_DIR)/*.py)
+
 # ---------- Тесты ----------
 TEST_ROOT  := tests
 OUT_DIR    := build/out
@@ -28,7 +34,7 @@ OUT_DIR    := build/out
 PYTHON     ?= python3
 GEN        := tools/gen_tests.py
 GEN_MODE   ?= mixed
-GEN_SIZES  ?= 10,100,1000,1000,1000,100000,1000000,10000000
+GEN_SIZES  ?= 10,100,1000,1000,1000,100000,1000000,10000000,100000000,1000000000
 GEN_SEED   ?= 42
 
 TASKS ?= quick_hull
@@ -37,11 +43,11 @@ TASKS ?= quick_hull
 
 task_tests = $(sort $(wildcard $(TEST_ROOT)/$(1)/input*.txt))
 
-.PHONY: all cpp java test clean help \
-        $(foreach t,$(TASKS),cpp-$(t) java-$(t) test-$(t)) \
+.PHONY: all cpp java py test clean help \
+        $(foreach t,$(TASKS),cpp-$(t) java-$(t) py-$(t) test-$(t)) \
         get-tests get-tests-clean
 
-all: cpp java
+all: cpp java py
 
 build:
 	mkdir -p build $(OUT_DIR)
@@ -56,8 +62,51 @@ $(CXX_BIN): $(CXX_SRC) $(CXX_HDRS) | build
 java:
 	$(MVN) -q -DskipTests compile
 
+# ============================ Python =================================
+py: build
+	@$(PYTHON) -m py_compile $(PY_SRCS) && echo "python: syntax ok"
+
 # ============================ Тесты ==================================
 # $(1) = язык (cpp|java), $(2) = задача
+
+define run_task
+	@mkdir -p $(OUT_DIR); \
+	lang=$(1); task=$(2); sol=$(2); fail=0; total=0; \
+	for inp in $(call task_tests,$(2)); do \
+	    base=$$(basename $$inp .txt); \
+	    num=$$(echo "$$base" | sed 's/^input//'); \
+	    exp=$(TEST_ROOT)/$$task/expected$${num}.txt; \
+	    total=$$((total+1)); \
+	    perf_cmd=""; \
+	    case "$$lang" in \
+	      cpp)  cmd="./$(CXX_BIN) $$sol $$inp $$exp"; \
+	            perf_cmd="perf stat -e L1-dcache-load-misses,L1-dcache-loads,LLC-load-misses,LLC-loads,cache-misses,cache-references -o $(OUT_DIR)/$${task}_$${base}_$${lang}.perf.txt ./$(CXX_BIN) $$sol $$inp $$exp";; \
+	      java) cmd="$(JAVA) -cp $(JAVA_CP) $(JAVA_MAIN) $$sol $$inp $$exp";; \
+				perf_cmd="perf stat -e cache-misses,cache-references -o $(OUT_DIR)/$${task}_$${base}_$${lang}.perf.txt \
+					$(JAVA) -cp $(JAVA_CP) $(JAVA_MAIN) $$sol $$inp $$exp"; \
+	      py)   cmd="PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -B $(PY_MAIN) $$sol $$inp $$exp";; \
+	      		perf stat -e cache-references,cache-misses,L1-dcache-loads,L1-dcache-load-misses,LLC-loads,LLC-load-misses \
+                    python3 -B src/main/python/main.py quick_hull tests/quick_hull/input1.txt tests/quick_hull/expected1.txt
+	      *)    echo "unknown lang: $$lang"; exit 1;; \
+	    esac; \
+	    printf '%-6s %-16s %-12s : ' "$$lang" "$$task" "$$base"; \
+	    if $$cmd > $(OUT_DIR)/$${task}_$${base}_$${lang}.out 2> $(OUT_DIR)/$${task}_$${base}_$${lang}.err; then \
+	        cat $(OUT_DIR)/$${task}_$${base}_$${lang}.out; \
+	    else \
+	        echo "FAIL"; cat $(OUT_DIR)/$${task}_$${base}_$${lang}.err; fail=$$((fail+1)); \
+	    fi; \
+	    if [ -n "$$perf_cmd" ]; then \
+	        if $$perf_cmd > /dev/null 2> $(OUT_DIR)/$${task}_$${base}_$${lang}.perf.err; then \
+	            { echo; echo "--- perf ---"; cat $(OUT_DIR)/$${task}_$${base}_$${lang}.perf.txt; } >> $(OUT_DIR)/$${task}_$${base}_$${lang}.out; \
+	        else \
+	            echo "  (perf skipped: $$(head -1 $(OUT_DIR)/$${task}_$${base}$${lang}.perf.err))"; \
+	        fi; \
+	    fi; \
+	done; \
+	echo "--- $$lang/$$task ($$sol): $$total tests, $$fail failures"; \
+	test $$fail -eq 0
+endef
+
 define run_task
 	@mkdir -p $(OUT_DIR); \
 	lang=$(1); task=$(2); sol=$(2); fail=0; total=0; \
@@ -99,7 +148,10 @@ $(foreach t,$(TASKS),cpp-$(t)): cpp-%: cpp
 $(foreach t,$(TASKS),java-$(t)): java-%: java
 	$(call run_task,java,$*)
 
-$(foreach t,$(TASKS),test-$(t)): test-%: cpp-% java-%
+$(foreach t,$(TASKS),py-$(t)): py-%: py
+	$(call run_task,py,$*)
+
+$(foreach t,$(TASKS),test-$(t)): test-%: cpp-% java-% py-%
 	@:
 
 test: all $(foreach t,$(TASKS),test-$(t))
@@ -132,13 +184,13 @@ gen-tests-refresh: gen-tests-clean gen-tests
 # ============================ Прочее =================================
 help:
 	@echo "Цели:"
-	@echo "  make all                       — собрать cpp + java"
-	@echo "  make cpp | make java           — собрать только один язык"
-	@echo "  make test                      — все тесты (оба языка, все задачи)"
-	@echo "  make test-<task>               — тесты задачи на обоих языках"
-	@echo "  make cpp-<task> | java-<task>  — тесты задачи на одном языке"
+	@echo "  make all | make cpp | make java | make py  — сборка/проверка"
+	@echo "  make test                                  — все тесты (cpp+java+py)"
+	@echo "  make test-<task>                           — тесты задачи на всех языках"
+	@echo "  make cpp-<task> | java-<task> | py-<task>  — тесты задачи на одном языке"
 	@echo ""
 	@echo "Задачи (TASKS): $(TASKS)"
 
 clean:
 	rm -rf build target
+	find $(PY_DIR) -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true

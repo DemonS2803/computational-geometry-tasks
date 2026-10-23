@@ -5,6 +5,7 @@
 ## Build results
 target
 build
+__pycache__
 
 ## Large files
 tests/quick_hull/expected8.txt
