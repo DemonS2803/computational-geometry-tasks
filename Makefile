@@ -1,56 +1,102 @@
+# =====================================================================
+#  Расширяемая сборка/тесты: языки (cpp/java) x задачи (tests/<task>)
+# =====================================================================
+
+# make-рецепты используют bash-синтаксис (${var#prefix} и т.п.)
+SHELL      := /bin/bash
+
 MVN        ?= mvn
 JAVA       ?= /usr/lib/jvm/java-21-openjdk/bin/java
 CXX        ?= g++
 CXXFLAGS   ?= -O2 -std=c++17 -Wall -Wextra
 
+# ---------- C++ ----------
 CXX_INC    := src/main/c++
 CXX_SRC    := $(CXX_INC)/main.cpp
+CXX_HDRS   := $(wildcard $(CXX_INC)/*.hpp)
 CXX_BIN    := build/runner_cpp
 
+# ---------- Java ----------
 JAVA_CP    := target/classes
 JAVA_MAIN  := ru.yandex.practicum.Main
 
-TEST_DIR   := tests/2d-convex-hull
+# ---------- Тесты ----------
+TEST_ROOT  := tests
 OUT_DIR    := build/out
-TESTS      := $(sort $(wildcard $(TEST_DIR)/input*.txt))
 
-.PHONY: all cpp java test clean
+TASKS ?= quick_hull
+# автовариант (если хочешь подхватывать каталоги автоматически):
+# TASKS ?= $(notdir $(patsubst %/,%,$(wildcard $(TEST_ROOT)/*/)))
+
+task_tests = $(sort $(wildcard $(TEST_ROOT)/$(1)/input*.txt))
+
+.PHONY: all cpp java test clean help \
+        $(foreach t,$(TASKS),cpp-$(t) java-$(t) test-$(t))
 
 all: cpp java
 
 build:
-	mkdir -p build
+	mkdir -p build $(OUT_DIR)
 
+# ============================ C++ ====================================
 cpp: $(CXX_BIN)
-$(CXX_BIN): $(CXX_SRC) $(CXX_INC)/solution.hpp $(CXX_INC)/quick_hull.hpp | build
+
+$(CXX_BIN): $(CXX_SRC) $(CXX_HDRS) | build
 	$(CXX) $(CXXFLAGS) -I $(CXX_INC) $(CXX_SRC) -o $@
 
+# ============================ Java ===================================
 java:
 	$(MVN) -q -DskipTests compile
 
-test: all
+# ============================ Тесты ==================================
+# $(1) = язык (cpp|java), $(2) = задача
+define run_task
 	@mkdir -p $(OUT_DIR); \
-	fail=0; total=0; \
-	for inp in $(TESTS); do \
+	lang=$(1); task=$(2); fail=0; total=0; \
+	for inp in $(call task_tests,$(2)); do \
 	    base=$$(basename $$inp .txt); \
-	    num=$${base#input}; \
-	    exp=$(TEST_DIR)/expected$${num}.txt; \
+	    num=$$(echo "$$base" | sed 's/^input//'); \
+	    exp=$(TEST_ROOT)/$$task/expected$${num}.txt; \
 	    total=$$((total+1)); \
-	    printf '=== %-10s cpp : ' $$base; \
-	    if ./$(CXX_BIN) quick_hull $$inp $$exp > $(OUT_DIR)/$$base.cpp.out 2> $(OUT_DIR)/$$base.cpp.err; then \
-	        cat $(OUT_DIR)/$$base.cpp.out; \
+	    if [ "$$lang" = "cpp" ]; then \
+	        cmd="./$(CXX_BIN) $$task $$inp $$exp"; \
 	    else \
-	        cat $(OUT_DIR)/$$base.cpp.out; cat $(OUT_DIR)/$$base.cpp.err; fail=$$((fail+1)); \
+	        cmd="$(JAVA) -cp $(JAVA_CP) $(JAVA_MAIN) $$task $$inp $$exp"; \
 	    fi; \
-	    printf '=== %-10s java: ' $$base; \
-	    if $(JAVA) -cp $(JAVA_CP) $(JAVA_MAIN) quick_hull $$inp $$exp > $(OUT_DIR)/$$base.java.out 2> $(OUT_DIR)/$$base.java.err; then \
-	        cat $(OUT_DIR)/$$base.java.out; \
+	    printf '%-6s %-16s %-12s : ' "$$lang" "$$task" "$$base"; \
+	    if $$cmd > $(OUT_DIR)/$${task}_$${base}_$${lang}.out 2> $(OUT_DIR)/$${task}_$${base}_$${lang}.err; then \
+	        cat $(OUT_DIR)/$${task}_$${base}_$${lang}.out; \
 	    else \
-	        cat $(OUT_DIR)/$$base.java.out; cat $(OUT_DIR)/$$base.java.err; fail=$$((fail+1)); \
+	        echo "FAIL"; \
+	        cat $(OUT_DIR)/$${task}_$${base}_$${lang}.err; \
+	        fail=$$((fail+1)); \
 	    fi; \
 	done; \
-	echo "--- tests: $$total, failures: $$fail"; \
+	echo "--- $$lang/$$task: $$total tests, $$fail failures"; \
 	test $$fail -eq 0
+endef
+
+$(foreach t,$(TASKS),cpp-$(t)): cpp-%: cpp
+	$(call run_task,cpp,$*)
+
+$(foreach t,$(TASKS),java-$(t)): java-%: java
+	$(call run_task,java,$*)
+
+$(foreach t,$(TASKS),test-$(t)): test-%: cpp-% java-%
+	@:
+
+test: all $(foreach t,$(TASKS),test-$(t))
+
+# ============================ Прочее =================================
+help:
+	@echo "Цели:"
+	@echo "  make all                       — собрать cpp + java"
+	@echo "  make cpp | make java           — собрать только один язык"
+	@echo "  make test                      — все тесты (оба языка, все задачи)"
+	@echo "  make test-<task>               — тесты задачи на обоих языках"
+	@echo "  make cpp-<task> | java-<task>  — тесты задачи на одном языке"
+	@echo ""
+	@echo "Задачи (TASKS): $(TASKS)"
 
 clean:
 	rm -rf build target
