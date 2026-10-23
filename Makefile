@@ -52,27 +52,36 @@ java:
 # $(1) = язык (cpp|java), $(2) = задача
 define run_task
 	@mkdir -p $(OUT_DIR); \
-	lang=$(1); task=$(2); fail=0; total=0; \
+	lang=$(1); task=$(2); sol=$(2); fail=0; total=0; \
 	for inp in $(call task_tests,$(2)); do \
 	    base=$$(basename $$inp .txt); \
 	    num=$$(echo "$$base" | sed 's/^input//'); \
 	    exp=$(TEST_ROOT)/$$task/expected$${num}.txt; \
 	    total=$$((total+1)); \
 	    if [ "$$lang" = "cpp" ]; then \
-	        cmd="./$(CXX_BIN) $$task $$inp $$exp"; \
+	        cmd="./$(CXX_BIN) $$sol $$inp $$exp"; \
+	        perf_cmd="perf stat -e L1-dcache-load-misses,L1-dcache-loads,LLC-load-misses,LLC-loads,cache-misses,cache-references \
+				 -o $(OUT_DIR)/$${task}_$${base}_$${lang}.perf.txt ./$(CXX_BIN) $$sol $$inp $$exp"; \
 	    else \
-	        cmd="$(JAVA) -cp $(JAVA_CP) $(JAVA_MAIN) $$task $$inp $$exp"; \
+	        cmd="$(JAVA) -cp $(JAVA_CP) $(JAVA_MAIN) $$sol $$inp $$exp"; \
+	        perf_cmd="perf stat -e cache-misses,cache-references -o $(OUT_DIR)/$${task}_$${base}_$${lang}.perf.txt \
+				$(JAVA) -cp $(JAVA_CP) $(JAVA_MAIN) $$sol $$inp $$exp"; \
 	    fi; \
 	    printf '%-6s %-16s %-12s : ' "$$lang" "$$task" "$$base"; \
 	    if $$cmd > $(OUT_DIR)/$${task}_$${base}_$${lang}.out 2> $(OUT_DIR)/$${task}_$${base}_$${lang}.err; then \
 	        cat $(OUT_DIR)/$${task}_$${base}_$${lang}.out; \
 	    else \
-	        echo "FAIL"; \
-	        cat $(OUT_DIR)/$${task}_$${base}_$${lang}.err; \
-	        fail=$$((fail+1)); \
+	        echo "FAIL"; cat $(OUT_DIR)/$${task}_$${base}_$${lang}.err; fail=$$((fail+1)); \
+	    fi; \
+	    if [ -n "$$perf_cmd" ]; then \
+	        if $$perf_cmd > /dev/null 2> $(OUT_DIR)/$${task}_$${base}_$${lang}.perf.err; then \
+	            { echo; echo "--- perf ---"; cat $(OUT_DIR)/$${task}_$${base}_$${lang}.perf.txt; } >> $(OUT_DIR)/$${task}_$${base}_$${lang}.out; \
+	        else \
+	            echo "  (perf skipped: $$(head -1 $(OUT_DIR)/$${task}_$${base}_$${lang}.perf.err))"; \
+	        fi; \
 	    fi; \
 	done; \
-	echo "--- $$lang/$$task: $$total tests, $$fail failures"; \
+	echo "--- $$lang/$$task ($$sol): $$total tests, $$fail failures"; \
 	test $$fail -eq 0
 endef
 
