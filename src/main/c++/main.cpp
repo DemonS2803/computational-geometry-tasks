@@ -1,5 +1,6 @@
 #include "solution.hpp"
 #include "quick_hull.hpp"
+#include "quick_hull_imp.hpp"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -25,6 +26,7 @@ int main(int argc, char** argv) {
 
     std::unique_ptr<Solution> sol;
     if (name == "quick_hull") sol = std::make_unique<QuickHull>();
+    else if (name == "quick_hull_imp") sol = std::make_unique<QuickHullImp>();
     else { std::cerr << "unknown solution: " << name << "\n"; return 2; }
 
     sol->readInput(readFile(inputPath));

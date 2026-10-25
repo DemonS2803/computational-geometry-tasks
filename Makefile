@@ -34,10 +34,10 @@ OUT_DIR    := build/out
 PYTHON     ?= python3
 GEN        := tools/gen_tests.py
 GEN_MODE   ?= mixed
-GEN_SIZES  ?= 10,100,1000,1000,1000,100000,1000000,10000000,100000000,1000000000
+GEN_SIZES  ?= 10,100,1000,1000,1000,100000,1000000,10000000
 GEN_SEED   ?= 42
 
-TASKS ?= quick_hull
+TASKS ?= quick_hull quick_hull_imp
 # автовариант (если хочешь подхватывать каталоги автоматически):
 # TASKS ?= $(notdir $(patsubst %/,%,$(wildcard $(TEST_ROOT)/*/)))
 

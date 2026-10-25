@@ -9,4 +9,7 @@ __pycache__
 
 ## Large files
 tests/quick_hull/expected8.txt
+tests/quick_hull_imp/input8.txt
 tests/quick_hull/input8.txt
+tests/quick_hull_imp/input8.txt
+visualization/*/*.png
