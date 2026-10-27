@@ -3,37 +3,30 @@
 
 using namespace std;
 
-struct Pt {
+struct Point {
     long double x, y;
-    Pt() : x(0), y(0) {}
-    Pt(long double x_, long double y_) : x(x_), y(y_) {}
+    Point() : x(0), y(0) {}
+    Point(long double x_, long double y_) : x(x_), y(y_) {}
 };
 
-static inline long double cross(const Pt& a, const Pt& b, const Pt& c) {
-    // (b-a) x (c-a)
+static inline long double T(const Point& a, const Point& b, const Point& c) {
     return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 }
 
-static inline long double dist2(const Pt& a, const Pt& b) {
-    long double dx = a.x - b.x, dy = a.y - b.y;
-    return dx*dx + dy*dy;
-}
-
-// лежит ли c на отрезке ab (при условии коллинеарности)
-static bool onSegment(const Pt& a, const Pt& b, const Pt& c) {
+// is C on AB line
+static bool isOnLine(const Point& a, const Point& b, const Point& c) {
     return min(a.x, b.x) <= c.x && c.x <= max(a.x, b.x) &&
            min(a.y, b.y) <= c.y && c.y <= max(a.y, b.y);
 }
 
-// s1 = (p1,p2), s2 = (p3,p4)
-static bool segmentsIntersect(const Pt& p1, const Pt& p2,
-                              const Pt& p3, const Pt& p4) {
+static bool isLinesIntersect(const Point& a, const Point& b,
+                              const Point& c, const Point& d) {
     const long double EPS = 1e-12L;
 
-    long double d1 = cross(p3, p4, p1);
-    long double d2 = cross(p3, p4, p2);
-    long double d3 = cross(p1, p2, p3);
-    long double d4 = cross(p1, p2, p4);
+    long double rotateAtoCD = T(c, d, a);
+    long double rotateBtoCD = T(c, d, b);
+    long double rotateCtoAB = T(a, b, c);
+    long double rotateDtoAB = T(a, b, d);
 
     auto sign = [&](long double v) -> int {
         if (v >  EPS) return  1;
@@ -41,16 +34,22 @@ static bool segmentsIntersect(const Pt& p1, const Pt& p2,
         return 0;
     };
 
-    int s1 = sign(d1), s2 = sign(d2), s3 = sign(d3), s4 = sign(d4);
+    int s1 = sign(rotateAtoCD);
+    int s2 = sign(rotateBtoCD);
+    int s3 = sign(rotateCtoAB);
+    int s4 = sign(rotateDtoAB);
 
-    // общий случай: строгое пересечение
-    if (s1 * s2 < 0 && s3 * s4 < 0) return true;
+    if (
+        ((rotateAtoCD > 0 && rotateBtoCD < 0) || (rotateAtoCD < 0 && rotateBtoCD > 0)) &&
+        ((rotateCtoAB > 0 && rotateDtoAB < 0) || (rotateCtoAB < 0 && rotateDtoAB > 0))
+    ) return true;
 
-    // вырожденные случаи (касание / коллинеарность)
-    if (s1 == 0 && onSegment(p3, p4, p1)) return true;
-    if (s2 == 0 && onSegment(p3, p4, p2)) return true;
-    if (s3 == 0 && onSegment(p1, p2, p3)) return true;
-    if (s4 == 0 && onSegment(p1, p2, p4)) return true;
+//    if (s1 * s2 < 0 && s3 * s4 < 0) return true;
+
+    if (s1 == 0 && isOnLine(c, d, a)) return true;
+    if (s2 == 0 && isOnLine(c, d, b)) return true;
+    if (s3 == 0 && isOnLine(a, b, c)) return true;
+    if (s4 == 0 && isOnLine(a, b, d)) return true;
 
     return false;
 }
@@ -67,12 +66,12 @@ int main() {
     out.reserve(inp.size() / 8);
 
     for (size_t i = 0; i + 7 < inp.size(); i += 8) {
-        Pt a1(inp[i+0], inp[i+1]);
-        Pt a2(inp[i+2], inp[i+3]);
-        Pt a3(inp[i+4], inp[i+5]);
-        Pt a4(inp[i+6], inp[i+7]);
+        Point a1(inp[i+0], inp[i+1]);
+        Point a2(inp[i+2], inp[i+3]);
+        Point a3(inp[i+4], inp[i+5]);
+        Point a4(inp[i+6], inp[i+7]);
 
-        out.push_back(segmentsIntersect(a1, a2, a3, a4) ? 'Y' : 'N');
+        out.push_back(isLinesIntersect(a1, a2, a3, a4) ? 'Y' : 'N');
     }
     out.push_back('\n');
     cout << out;
