@@ -77,6 +77,14 @@ public class QuickHull implements Solution {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+
+//            while (first + 1 < n && T(points[0], points[first], points[first + 1]) == 0) {
+//                first++;
+//            }
+
+//            while (last - 1 > first && T(points[0], points[last], points[last - 1]) == 0) {
+//                last--;
+//            }
     }
 
     // ---------- алгоритм (как в предыдущем ответе) ----------
