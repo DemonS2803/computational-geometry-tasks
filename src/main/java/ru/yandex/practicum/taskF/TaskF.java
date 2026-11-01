@@ -3,12 +3,9 @@ package ru.yandex.practicum.taskF;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.StringTokenizer;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.*;
 
 
 public class TaskF {
@@ -48,17 +45,12 @@ public class TaskF {
     }
 
     public static void solve() {
-        // сортировка по x, затем по y
+        // sort by x, then by y
         Arrays.sort(points);
 
-        Set<Point> pointSet = new HashSet<>();
         List<Point> unique = new ArrayList<>();
         for (int i = 0; i < n; i++) {
-//            if (i == 0 || points[i].x != points[i-1].x || points[i].y != points[i-1].y) {
-//                unique.add(points[i]);
-//            }
-            if (!pointSet.contains(points[i])) {
-                pointSet.add(points[i]);
+            if (i == 0 || points[i].compareTo(points[i - 1]) != 0) {
                 unique.add(points[i]);
             }
         }
@@ -66,18 +58,19 @@ public class TaskF {
         int m = unique.size();
         hull = new ArrayList<>();
 
-//        if (m == 1) {
-//            hull.add(unique.get(0));
-//            System.out.println(1);
-//            System.out.println(hull.get(0).x + " " + hull.get(0).y);
-//            System.out.println("0.0");
-//            return;
-//        }
+        if (m == 1) {
+            hull.add(unique.get(0));
+            System.out.println(1);
+            System.out.println(hull.get(0).x + " " + hull.get(0).y);
+            System.out.println("0.0");
+            return;
+        }
 
-        // Andrew's monotone chain
         List<Point> lower = new ArrayList<>();
         for (int i = 0; i < m; i++) {
-            while (lower.size() >= 2 && cross(lower.get(lower.size()-2), lower.get(lower.size()-1), unique.get(i)) <= 0) {
+            // curr is inside. thx to ccw
+            while (lower.size() >= 2 && cross(lower.get(lower.size() - 2), lower.get(lower.size() - 1), unique.get(i)) <= 0) {
+                // delete prev, which is on line
                 lower.remove(lower.size() - 1);
             }
             lower.add(unique.get(i));
@@ -85,17 +78,22 @@ public class TaskF {
 
         List<Point> upper = new ArrayList<>();
         for (int i = m - 1; i >= 0; i--) {
-            while (upper.size() >= 2 && cross(upper.get(upper.size()-2), upper.get(upper.size()-1), unique.get(i)) <= 0) {
+            // curr is inside. thx to ccw
+            while (upper.size() >= 2 && cross(upper.get(upper.size() - 2), upper.get(upper.size() - 1), unique.get(i)) <= 0) {
+                // save on line
                 upper.remove(upper.size() - 1);
             }
             upper.add(unique.get(i));
         }
 
-        // Combine lower[:-1] + upper[:-1]
-        for (int i = 0; i < lower.size() - 1; i++) hull.add(lower.get(i));
-        for (int i = 0; i < upper.size() - 1; i++) hull.add(upper.get(i));
+        for (int i = 0; i < lower.size() - 1; i++) {
+            hull.add(lower.get(i));
+        }
+        for (int i = 0; i < upper.size() - 1; i++) {
+            hull.add(upper.get(i));
+        }
 
-        // Reverse to clockwise order (keep first point in place)
+//        Collections.reverse(hull);
         int sz = hull.size();
         for (int i = 1; i <= sz / 2; i++) {
             Point tmp = hull.get(sz - i);
@@ -103,21 +101,29 @@ public class TaskF {
             hull.set(i, tmp);
         }
 
-        // Compute signed area * 2 using shoelace
-        long area2 = 0;
+        BigDecimal area2 = BigDecimal.ZERO;
         for (int i = 0; i < hull.size(); i++) {
             Point a = hull.get(i);
             Point b = hull.get((i + 1) % hull.size());
-            area2 += a.x * b.y - b.x * a.y;
+            area2 = area2
+                    .add(BigDecimal.valueOf(a.x).multiply(BigDecimal.valueOf(b.y)))
+                    .subtract(BigDecimal.valueOf(a.y).multiply(BigDecimal.valueOf(b.x)));
         }
-        area2 = Math.abs(area2);
+        area2 = area2.abs();
 
-        // Output
-        System.out.println(hull.size());
-        for (Point p : hull) {
-            System.out.println(p.x + " " + p.y);
+        StringBuilder sb = new StringBuilder();
+        sb.append(hull.size()).append('\n');
+        for (int i = 0; i < hull.size(); i++) {
+            sb.append(hull.get(i).x).append(' ').append(hull.get(i).y).append('\n');
         }
-        System.out.printf("%.1f%n", area2 / 2.0);
+
+
+        BigDecimal[] qr = area2.divideAndRemainder(BigDecimal.valueOf(2.0));
+        BigDecimal bd = qr[0].add(qr[1]);
+        sb.append(bd);
+
+
+        System.out.println(sb);
     }
 
     public static void readInput() throws IOException {
